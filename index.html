@@ -1,0 +1,85 @@
+
+<!DOCTYPE html>
+<html>
+<head>
+  <title>Mines Predictor</title>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <style>
+    body { font-family: sans-serif; padding: 20px; text-align: center; }
+    input, button { margin: 5px; padding: 8px; width: 200px; }
+    .grid { display: grid; grid-template-columns: repeat(5, 50px); gap: 5px; margin: 20px auto; }
+    .cell { width: 50px; height: 50px; background: #eee; display: flex; justify-content: center; align-items: center; }
+    .mine { background: red; color: white; font-weight: bold; }
+  </style>
+</head>
+<body>
+  <h1>💣 Mines Predictor</h1>
+  <input id="clientSeed" placeholder="Client Seed" />
+  <input id="serverSeed" placeholder="Server Seed" />
+  <input id="nonce" placeholder="Nonce (e.g. 1)" type="number" />
+  <br />
+  <button onclick="predict()">Predict Mines</button>
+  <div class="grid" id="grid"></div>
+
+  <script>
+    function getHmacSha256(key, message) {
+      const encoder = new TextEncoder();
+      const keyData = encoder.encode(key);
+      const msgData = encoder.encode(message);
+
+      return crypto.subtle.importKey(
+        "raw", keyData, { name: "HMAC", hash: "SHA-256" }, false, ["sign"]
+      ).then(cryptoKey =>
+        crypto.subtle.sign("HMAC", cryptoKey, msgData)
+      ).then(signature =>
+        Array.from(new Uint8Array(signature)).map(b => b.toString(16).padStart(2, "0")).join("")
+      );
+    }
+
+    async function generateMines(clientSeed, serverSeed, nonce, mineCount = 3) {
+      const input = `${clientSeed}:${nonce}`;
+      const hash = await getHmacSha256(serverSeed, input);
+
+      const numbers = [];
+      for (let i = 0; i < hash.length; i += 4) {
+        const slice = hash.slice(i, i + 4);
+        const num = parseInt(slice, 16) % 25;
+        if (!numbers.includes(num)) numbers.push(num);
+        if (numbers.length === mineCount) break;
+      }
+      return numbers;
+    }
+
+    function renderGrid(mines) {
+      const grid = document.getElementById("grid");
+      grid.innerHTML = "";
+      for (let i = 0; i < 25; i++) {
+        const cell = document.createElement("div");
+        cell.className = "cell";
+        if (mines.includes(i)) {
+          cell.classList.add("mine");
+          cell.textContent = "💣";
+        } else {
+          cell.textContent = i;
+        }
+        grid.appendChild(cell);
+      }
+    }
+
+    async function predict() {
+      const clientSeed = document.getElementById("clientSeed").value.trim();
+      const serverSeed = document.getElementById("serverSeed").value.trim();
+      const nonce = parseInt(document.getElementById("nonce").value.trim());
+
+      if (!clientSeed || !serverSeed || isNaN(nonce)) {
+        alert("Please enter valid client seed, server seed, and nonce.");
+        return;
+      }
+
+      const mines = await generateMines(clientSeed, serverSeed, nonce);
+      renderGrid(mines);
+    }
+  </script>
+</body>
+</html>
